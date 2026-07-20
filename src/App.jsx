@@ -308,7 +308,7 @@ export default function App() {
           </div>
         </div>
         <div style={{ display: "flex", borderTop: "0.5px solid rgba(255,255,255,0.1)" }}>
-          {[["log","ti-list","Log"],["weekly","ti-calendar","Weekly"],["summary","ti-chart-bar","Summary"],["settings","ti-settings","Settings"]].map(([v, icon, label]) => (
+          {[["log","ti-list","Log"],["weekly","ti-calendar","Weekly"],["summary","ti-chart-bar","Summary"],["reports","ti-report-analytics","Reports"],["settings","ti-settings","Settings"]].map(([v, icon, label]) => (
             <button key={v} onClick={() => setView(v)} style={{ flex: 1, background: "none", border: "none", borderBottom: view === v ? "2px solid #f0c040" : "2px solid transparent", color: view === v ? "#f0c040" : "#7a9cc0", padding: "8px 0", fontSize: 11, cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
               <i className={`ti ${icon}`} style={{ fontSize: 18 }} aria-hidden="true" />{label}
             </button>
@@ -324,6 +324,7 @@ export default function App() {
         {view === "log" && <LogView entries={filteredEntries} weeks={weeks} filterWeek={filterWeek} setFilterWeek={setFilterWeek} onEdit={startEdit} onDelete={deleteEntry} onSign={setSignModal} onDuplicate={duplicateEntry} />}
         {view === "weekly" && <WeeklyView entries={data.entries} weeks={weeks} />}
         {view === "summary" && <SummaryView entries={data.entries} totalAll={totalAll} totalPrimary={totalPrimary} totalRelated={totalRelated} />}
+        {view === "reports" && <ReportsView entries={data.entries} employers={data.employers} />}
         {view === "settings" && <SettingsView data={data} setData={setData} showToast={showToast} allTasks={allTasks} token={token} signIn={signIn} signOut={signOut} syncStatus={syncStatus} onManualSync={() => token && syncFromDrive(token)} />}
       </div>
 
@@ -591,6 +592,191 @@ function SignModal({ entry, supervisors, onSign, onClose }) {
           <button onClick={verifyPin} style={{ width: "100%", padding: 11, background: "#1a2332", color: "#f0c040", border: "none", borderRadius: 8, fontSize: 14, cursor: "pointer" }}>Verify & sign</button>
         </>}
       </div>
+    </div>
+  );
+}
+
+function ReportsView({ entries, employers }) {
+  const today = new Date().toISOString().split("T")[0];
+  const firstEntry = entries.length > 0 ? [...entries].sort((a,b) => a.date.localeCompare(b.date))[0].date : today;
+
+  const [startDate, setStartDate] = useState(firstEntry);
+  const [endDate, setEndDate] = useState(today);
+  const [selEmployer, setSelEmployer] = useState("all");
+
+  // Derive all employers from entries + saved employers list
+  const allEmployers = [...new Set([...employers, ...entries.map(e => e.employer).filter(Boolean)])].sort();
+
+  // Filter entries
+  const filtered = entries.filter(e => {
+    const inRange = e.date >= startDate && e.date <= endDate;
+    const inEmployer = selEmployer === "all" || e.employer === selEmployer;
+    return inRange && inEmployer;
+  });
+
+  const totalAll = totalHours(filtered);
+  const totalPrimary = totalHours(filtered.filter(e => e.type === "primary"));
+  const totalRelated = totalHours(filtered.filter(e => e.type === "related"));
+  const signed = filtered.filter(e => (e.signatures || []).length > 0).length;
+
+  const byTask = {};
+  filtered.forEach(e => { byTask[e.task] = (byTask[e.task] || 0) + Number(e.hours); });
+
+  const byEmployer = {};
+  filtered.forEach(e => { if (e.employer) byEmployer[e.employer] = (byEmployer[e.employer] || 0) + Number(e.hours); });
+
+  const bySupervisor = {};
+  filtered.forEach(e => { if (e.supervisor) bySupervisor[e.supervisor] = (bySupervisor[e.supervisor] || 0) + Number(e.hours); });
+
+  const NC_LIMITED = 3000;
+  const NC_PRIMARY = 2000;
+
+  function clearFilters() {
+    setStartDate(firstEntry);
+    setEndDate(today);
+    setSelEmployer("all");
+  }
+
+  const isFiltered = startDate !== firstEntry || endDate !== today || selEmployer !== "all";
+
+  return (
+    <div>
+      {/* Filter Card */}
+      <div style={{ background: "#1a2332", borderRadius: 12, padding: "14px", marginBottom: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: "#e8f0f8" }}>
+            <i className="ti ti-filter" aria-hidden="true" /> Filter Report
+          </div>
+          {isFiltered && (
+            <button onClick={clearFilters} style={{ fontSize: 11, color: "#f0c040", background: "none", border: "0.5px solid #f0c040", borderRadius: 20, padding: "3px 10px", cursor: "pointer" }}>
+              Clear filters
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#7a9cc0", marginBottom: 4 }}>Start date</div>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)}
+              style={{ width: "100%", padding: "8px 10px", fontSize: 13, border: "0.5px solid #3a4a5c", borderRadius: 8, background: "#253347", color: "#e8f0f8" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#7a9cc0", marginBottom: 4 }}>End date</div>
+            <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)}
+              style={{ width: "100%", padding: "8px 10px", fontSize: 13, border: "0.5px solid #3a4a5c", borderRadius: 8, background: "#253347", color: "#e8f0f8" }} />
+          </div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 11, color: "#7a9cc0", marginBottom: 4 }}>Company / employer</div>
+          <select value={selEmployer} onChange={e => setSelEmployer(e.target.value)}
+            style={{ width: "100%", padding: "8px 10px", fontSize: 13, border: "0.5px solid #3a4a5c", borderRadius: 8, background: "#253347", color: "#e8f0f8" }}>
+            <option value="all">All employers</option>
+            {allEmployers.map(emp => <option key={emp} value={emp}>{emp}</option>)}
+          </select>
+        </div>
+
+        {/* Active filter summary */}
+        <div style={{ marginTop: 10, fontSize: 11, color: "#7a9cc0" }}>
+          Showing: {formatDate(startDate)} — {formatDate(endDate)}
+          {selEmployer !== "all" ? ` · ${selEmployer}` : " · All employers"}
+          {" · "}<span style={{ color: "#f0c040" }}>{filtered.length} entries</span>
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "3rem 1rem", color: "#888" }}>
+          <i className="ti ti-search-off" style={{ fontSize: 40, display: "block", marginBottom: 12 }} aria-hidden="true" />
+          <div style={{ fontSize: 15 }}>No entries match these filters</div>
+          <div style={{ fontSize: 13, marginTop: 4 }}>Try adjusting the date range or employer</div>
+        </div>
+      ) : (
+        <>
+          {/* Stats grid */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+            <StatCard label="Total hours" value={totalAll.toFixed(1)} unit="hrs" color="#f0c040" />
+            <StatCard label="Entries" value={filtered.length} unit="records" color="#111" />
+            <StatCard label="Primary hrs" value={totalPrimary.toFixed(1)} unit="hrs" color="#5dcaa5" />
+            <StatCard label="Related hrs" value={totalRelated.toFixed(1)} unit="hrs" color="#7f77dd" />
+          </div>
+
+          {/* NC License progress — only show if showing all employers */}
+          {selEmployer === "all" && (
+            <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #ddd", padding: 14, marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 10, fontWeight: 500 }}>
+                NC Limited License progress {isFiltered ? "(filtered period)" : ""}
+              </div>
+              <ProgressBar label="Total hours" current={totalAll} target={NC_LIMITED} color="#f0c040" />
+              <ProgressBar label="Primary (on-the-job)" current={totalPrimary} target={NC_PRIMARY} color="#5dcaa5" />
+              <div style={{ fontSize: 11, color: "#888", marginTop: 6 }}>
+                NC requires 3,000 total hrs (min. 2,000 primary) for Limited EC license
+              </div>
+            </div>
+          )}
+
+          {/* Signed entries */}
+          {signed > 0 && (
+            <div style={{ background: "#eaf3de", borderRadius: 10, padding: "10px 14px", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: 13, color: "#3b6d11" }}>
+                <i className="ti ti-check" aria-hidden="true" /> Signed entries
+              </span>
+              <span style={{ fontSize: 15, fontWeight: 500, color: "#3b6d11" }}>{signed} of {filtered.length}</span>
+            </div>
+          )}
+
+          {/* Hours by task */}
+          <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #ddd", overflow: "hidden", marginBottom: 12 }}>
+            <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #eee", fontSize: 12, color: "#888", fontWeight: 500 }}>Hours by task type</div>
+            {Object.entries(byTask).sort((a,b) => b[1]-a[1]).map(([task, hrs]) => (
+              <div key={task} style={{ padding: "9px 14px", borderBottom: "0.5px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: "#111", flex: 1 }}>{task}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ width: 50, height: 4, borderRadius: 2, background: "#f0f0f0" }}>
+                    <div style={{ width: `${Math.min(100, (hrs / Math.max(totalAll,1)) * 100)}%`, height: "100%", background: "#f0c040", borderRadius: 2 }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 500, minWidth: 40, textAlign: "right" }}>{hrs.toFixed(1)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Hours by employer — only show when not filtered to one employer */}
+          {selEmployer === "all" && Object.keys(byEmployer).length > 1 && (
+            <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #ddd", overflow: "hidden", marginBottom: 12 }}>
+              <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #eee", fontSize: 12, color: "#888", fontWeight: 500 }}>Hours by employer</div>
+              {Object.entries(byEmployer).sort((a,b) => b[1]-a[1]).map(([emp, hrs]) => (
+                <div key={emp} style={{ padding: "9px 14px", borderBottom: "0.5px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#111" }}>{emp}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 50, height: 4, borderRadius: 2, background: "#f0f0f0" }}>
+                      <div style={{ width: `${Math.min(100, (hrs / Math.max(totalAll,1)) * 100)}%`, height: "100%", background: "#5dcaa5", borderRadius: 2 }} />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 500, minWidth: 40, textAlign: "right" }}>{hrs.toFixed(1)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Hours by supervisor */}
+          {Object.keys(bySupervisor).length > 0 && (
+            <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #ddd", overflow: "hidden", marginBottom: 12 }}>
+              <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #eee", fontSize: 12, color: "#888", fontWeight: 500 }}>Hours by supervisor / journeyman</div>
+              {Object.entries(bySupervisor).sort((a,b) => b[1]-a[1]).map(([sup, hrs]) => (
+                <div key={sup} style={{ padding: "9px 14px", borderBottom: "0.5px solid #eee", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: 12, color: "#111" }}>{sup}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 50, height: 4, borderRadius: 2, background: "#f0f0f0" }}>
+                      <div style={{ width: `${Math.min(100, (hrs / Math.max(totalAll,1)) * 100)}%`, height: "100%", background: "#7f77dd", borderRadius: 2 }} />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 500, minWidth: 40, textAlign: "right" }}>{hrs.toFixed(1)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

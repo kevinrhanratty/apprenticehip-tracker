@@ -794,7 +794,15 @@ function ReportsView({ entries, employers }) {
 
           {/* Notes report */}
           {(function() {
-            const withNotes = [...filtered.filter(e => e.notes && e.notes.trim())].sort((a,b) => b.date.localeCompare(a.date));
+            const withNotes = [...filtered.filter(e => e.notes && e.notes.trim())].sort((a,b) => a.date.localeCompare(b.date));
+            const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+            const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+            function formatNoteDate(dateStr) {
+              const [y, m, d] = dateStr.split("-").map(Number);
+              const dt = new Date(y, m - 1, d);
+              return `${DAYS[dt.getDay()]} ${MONTHS[m-1]} ${d}, ${y}`;
+            }
 
             function buildCopyText() {
               const header = [
@@ -806,14 +814,9 @@ function ReportsView({ entries, employers }) {
                 "========================================",
                 ""
               ].join("\n");
-              const body = withNotes.map(e => [
-                `Date: ${formatDate(e.date)}`,
-                `Task: ${e.task}`,
-                `Type: ${e.type === "primary" ? "Primary" : "Related"}  |  Hours: ${Number(e.hours).toFixed(1)}`,
-                e.employer ? `Employer: ${e.employer}${e.supervisor ? `  |  Supervisor: ${e.supervisor}` : ""}` : "",
-                `Notes:\n${e.notes.trim()}`,
-                "----------------------------------------"
-              ].filter(Boolean).join("\n")).join("\n\n");
+              const body = withNotes.map(e =>
+                `Date: ${formatNoteDate(e.date)}\n${e.notes.trim()}`
+              ).join("\n\n");
               return header + body;
             }
 
@@ -843,20 +846,8 @@ function ReportsView({ entries, employers }) {
                 ) : (
                   withNotes.map(e => (
                     <div key={e.id} style={{ padding: "12px 14px", borderBottom: "0.5px solid #eee" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                        <div>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: "#111" }}>{formatDate(e.date)}</span>
-                          <span style={{ fontSize: 11, color: "#888", marginLeft: 8 }}>{e.task}</span>
-                        </div>
-                        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                          <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: e.type === "primary" ? "#d4f0e3" : "#e8e6f8", color: e.type === "primary" ? "#1a6644" : "#4a3fa0", fontWeight: 500 }}>
-                            {e.type === "primary" ? "Primary" : "Related"}
-                          </span>
-                          <span style={{ fontSize: 11, color: "#888" }}>{Number(e.hours).toFixed(1)} hrs</span>
-                        </div>
-                      </div>
-                      {e.employer && <div style={{ fontSize: 11, color: "#aaa", marginBottom: 6 }}>{e.employer}{e.supervisor ? ` · ${e.supervisor}` : ""}</div>}
-                      <div style={{ fontSize: 13, color: "#333", lineHeight: 1.5, background: "#f8f9fa", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap" }}>{e.notes.trim()}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#555", marginBottom: 4 }}>Date: {formatNoteDate(e.date)}</div>
+                      <div style={{ fontSize: 13, color: "#333", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{e.notes.trim()}</div>
                     </div>
                   ))
                 )}

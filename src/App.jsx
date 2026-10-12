@@ -604,6 +604,7 @@ function ReportsView({ entries, employers }) {
   const [endDate, setEndDate] = useState(today);
   const [selEmployer, setSelEmployer] = useState("all");
   const [selType, setSelType] = useState("all");
+  const [copied, setCopied] = useState(false);
 
   // Derive all employers from entries + saved employers list
   const allEmployers = [...new Set([...employers, ...entries.map(e => e.employer).filter(Boolean)])].sort();
@@ -792,9 +793,8 @@ function ReportsView({ entries, employers }) {
           )}
 
           {/* Notes report */}
-          {(() => {
+          {(function() {
             const withNotes = [...filtered.filter(e => e.notes && e.notes.trim())].sort((a,b) => b.date.localeCompare(a.date));
-            const [copied, setCopied] = React.useState(false);
 
             function buildCopyText() {
               const header = [
@@ -803,19 +803,17 @@ function ReportsView({ entries, employers }) {
                 selEmployer !== "all" ? `Employer: ${selEmployer}` : "Employer: All",
                 selType !== "all" ? `Hour type: ${selType === "primary" ? "Primary" : "Related"}` : "Hour type: All",
                 `Entries with notes: ${withNotes.length}`,
-                "=".repeat(40),
+                "========================================",
                 ""
               ].join("\n");
-
               const body = withNotes.map(e => [
                 `Date: ${formatDate(e.date)}`,
                 `Task: ${e.task}`,
                 `Type: ${e.type === "primary" ? "Primary" : "Related"}  |  Hours: ${Number(e.hours).toFixed(1)}`,
                 e.employer ? `Employer: ${e.employer}${e.supervisor ? `  |  Supervisor: ${e.supervisor}` : ""}` : "",
                 `Notes:\n${e.notes.trim()}`,
-                "-".repeat(40)
+                "----------------------------------------"
               ].filter(Boolean).join("\n")).join("\n\n");
-
               return header + body;
             }
 
@@ -864,7 +862,7 @@ function ReportsView({ entries, employers }) {
                 )}
               </div>
             );
-          })()}
+          }())}
         </>
       )}
     </div>

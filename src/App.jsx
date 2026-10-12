@@ -603,6 +603,7 @@ function ReportsView({ entries, employers }) {
   const [startDate, setStartDate] = useState(firstEntry);
   const [endDate, setEndDate] = useState(today);
   const [selEmployer, setSelEmployer] = useState("all");
+  const [selType, setSelType] = useState("all");
 
   // Derive all employers from entries + saved employers list
   const allEmployers = [...new Set([...employers, ...entries.map(e => e.employer).filter(Boolean)])].sort();
@@ -611,7 +612,8 @@ function ReportsView({ entries, employers }) {
   const filtered = entries.filter(e => {
     const inRange = e.date >= startDate && e.date <= endDate;
     const inEmployer = selEmployer === "all" || e.employer === selEmployer;
-    return inRange && inEmployer;
+    const inType = selType === "all" || e.type === selType;
+    return inRange && inEmployer && inType;
   });
 
   const totalAll = totalHours(filtered);
@@ -635,9 +637,10 @@ function ReportsView({ entries, employers }) {
     setStartDate(firstEntry);
     setEndDate(today);
     setSelEmployer("all");
+    setSelType("all");
   }
 
-  const isFiltered = startDate !== firstEntry || endDate !== today || selEmployer !== "all";
+  const isFiltered = startDate !== firstEntry || endDate !== today || selEmployer !== "all" || selType !== "all";
 
   return (
     <div>
@@ -667,19 +670,31 @@ function ReportsView({ entries, employers }) {
           </div>
         </div>
 
-        <div>
-          <div style={{ fontSize: 11, color: "#7a9cc0", marginBottom: 4 }}>Company / employer</div>
-          <select value={selEmployer} onChange={e => setSelEmployer(e.target.value)}
-            style={{ width: "100%", padding: "8px 10px", fontSize: 13, border: "0.5px solid #3a4a5c", borderRadius: 8, background: "#253347", color: "#e8f0f8" }}>
-            <option value="all">All employers</option>
-            {allEmployers.map(emp => <option key={emp} value={emp}>{emp}</option>)}
-          </select>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 0 }}>
+          <div>
+            <div style={{ fontSize: 11, color: "#7a9cc0", marginBottom: 4 }}>Company / employer</div>
+            <select value={selEmployer} onChange={e => setSelEmployer(e.target.value)}
+              style={{ width: "100%", padding: "8px 10px", fontSize: 13, border: "0.5px solid #3a4a5c", borderRadius: 8, background: "#253347", color: "#e8f0f8" }}>
+              <option value="all">All employers</option>
+              {allEmployers.map(emp => <option key={emp} value={emp}>{emp}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 11, color: "#7a9cc0", marginBottom: 4 }}>Hour type</div>
+            <select value={selType} onChange={e => setSelType(e.target.value)}
+              style={{ width: "100%", padding: "8px 10px", fontSize: 13, border: "0.5px solid #3a4a5c", borderRadius: 8, background: "#253347", color: "#e8f0f8" }}>
+              <option value="all">All types</option>
+              <option value="primary">Primary only</option>
+              <option value="related">Related only</option>
+            </select>
+          </div>
         </div>
 
         {/* Active filter summary */}
         <div style={{ marginTop: 10, fontSize: 11, color: "#7a9cc0" }}>
           Showing: {formatDate(startDate)} — {formatDate(endDate)}
           {selEmployer !== "all" ? ` · ${selEmployer}` : " · All employers"}
+          {selType !== "all" ? ` · ${selType === "primary" ? "Primary" : "Related"}` : " · All types"}
           {" · "}<span style={{ color: "#f0c040" }}>{filtered.length} entries</span>
         </div>
       </div>
@@ -775,6 +790,81 @@ function ReportsView({ entries, employers }) {
               ))}
             </div>
           )}
+
+          {/* Notes report */}
+          {(() => {
+            const withNotes = [...filtered.filter(e => e.notes && e.notes.trim())].sort((a,b) => b.date.localeCompare(a.date));
+            const [copied, setCopied] = React.useState(false);
+
+            function buildCopyText() {
+              const header = [
+                "APPRENTICESHIP NOTES REPORT",
+                `Period: ${formatDate(startDate)} — ${formatDate(endDate)}`,
+                selEmployer !== "all" ? `Employer: ${selEmployer}` : "Employer: All",
+                selType !== "all" ? `Hour type: ${selType === "primary" ? "Primary" : "Related"}` : "Hour type: All",
+                `Entries with notes: ${withNotes.length}`,
+                "=".repeat(40),
+                ""
+              ].join("\n");
+
+              const body = withNotes.map(e => [
+                `Date: ${formatDate(e.date)}`,
+                `Task: ${e.task}`,
+                `Type: ${e.type === "primary" ? "Primary" : "Related"}  |  Hours: ${Number(e.hours).toFixed(1)}`,
+                e.employer ? `Employer: ${e.employer}${e.supervisor ? `  |  Supervisor: ${e.supervisor}` : ""}` : "",
+                `Notes:\n${e.notes.trim()}`,
+                "-".repeat(40)
+              ].filter(Boolean).join("\n")).join("\n\n");
+
+              return header + body;
+            }
+
+            function handleCopy() {
+              navigator.clipboard.writeText(buildCopyText()).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              });
+            }
+
+            return (
+              <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #ddd", overflow: "hidden", marginBottom: 12 }}>
+                <div style={{ padding: "10px 14px", borderBottom: "0.5px solid #eee", fontSize: 12, color: "#888", fontWeight: 500, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span><i className="ti ti-notes" aria-hidden="true" /> Notes by entry</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: "#aaa" }}>{withNotes.length} of {filtered.length} have notes</span>
+                    {withNotes.length > 0 && (
+                      <button onClick={handleCopy} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 20, border: copied ? "0.5px solid #5dcaa5" : "0.5px solid #bbb", background: copied ? "#eaf9f2" : "#f5f5f5", color: copied ? "#1a6644" : "#555", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                        <i className={copied ? "ti ti-check" : "ti ti-copy"} aria-hidden="true" />
+                        {copied ? "Copied!" : "Copy all"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {withNotes.length === 0 ? (
+                  <div style={{ padding: "16px 14px", fontSize: 13, color: "#aaa", textAlign: "center" }}>No notes found for the selected filters</div>
+                ) : (
+                  withNotes.map(e => (
+                    <div key={e.id} style={{ padding: "12px 14px", borderBottom: "0.5px solid #eee" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+                        <div>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "#111" }}>{formatDate(e.date)}</span>
+                          <span style={{ fontSize: 11, color: "#888", marginLeft: 8 }}>{e.task}</span>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+                          <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 10, background: e.type === "primary" ? "#d4f0e3" : "#e8e6f8", color: e.type === "primary" ? "#1a6644" : "#4a3fa0", fontWeight: 500 }}>
+                            {e.type === "primary" ? "Primary" : "Related"}
+                          </span>
+                          <span style={{ fontSize: 11, color: "#888" }}>{Number(e.hours).toFixed(1)} hrs</span>
+                        </div>
+                      </div>
+                      {e.employer && <div style={{ fontSize: 11, color: "#aaa", marginBottom: 6 }}>{e.employer}{e.supervisor ? ` · ${e.supervisor}` : ""}</div>}
+                      <div style={{ fontSize: 13, color: "#333", lineHeight: 1.5, background: "#f8f9fa", borderRadius: 8, padding: "8px 10px", whiteSpace: "pre-wrap" }}>{e.notes.trim()}</div>
+                    </div>
+                  ))
+                )}
+              </div>
+            );
+          })()}
         </>
       )}
     </div>

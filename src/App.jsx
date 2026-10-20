@@ -600,8 +600,16 @@ function ReportsView({ entries, employers }) {
   const today = new Date().toISOString().split("T")[0];
   const firstEntry = entries.length > 0 ? [...entries].sort((a,b) => a.date.localeCompare(b.date))[0].date : today;
 
-  const [startDate, setStartDate] = useState(firstEntry);
-  const [endDate, setEndDate] = useState(today);
+  function prevWeekday(targetDay) {
+    // targetDay: 0=Sun,1=Mon,...,5=Fri,6=Sat
+    const d = new Date();
+    const diff = ((d.getDay() - targetDay + 7) % 7) || 7; // always go back at least 1
+    d.setDate(d.getDate() - diff);
+    return d.toISOString().split("T")[0];
+  }
+
+  const [startDate, setStartDate] = useState(prevWeekday(1)); // Monday prior
+  const [endDate, setEndDate] = useState(prevWeekday(5));     // Friday prior
   const [selEmployer, setSelEmployer] = useState("all");
   const [selType, setSelType] = useState("all");
   const [copied, setCopied] = useState(false);
@@ -635,13 +643,13 @@ function ReportsView({ entries, employers }) {
   const NC_PRIMARY = 2000;
 
   function clearFilters() {
-    setStartDate(firstEntry);
-    setEndDate(today);
+    setStartDate(prevWeekday(1));
+    setEndDate(prevWeekday(5));
     setSelEmployer("all");
     setSelType("all");
   }
 
-  const isFiltered = startDate !== firstEntry || endDate !== today || selEmployer !== "all" || selType !== "all";
+  const isFiltered = selEmployer !== "all" || selType !== "all";
 
   return (
     <div>
